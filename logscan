@@ -1,0 +1,288 @@
+#!/usr/bin/python
+
+# This program is free software; you can redistribute it and/or modify
+# it under the terms of the GNU General Public License version 2, as
+# published by the Free Software Foundation.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, write to the Free Software
+# Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA 02111-1307, USA.
+
+__version__ = '0.5.1'
+
+#TODO: logscan should import logscan.py
+#TODO: without date get specified time for everyday periodically
+
+import os
+import re
+import argparse
+from datetime import datetime
+from datetime import time
+from datetime import timedelta
+
+import timeparse
+import timeparser
+
+from logscanlib import add_timecodes
+from logscanlib import RotatedLogs
+from logscanlib import TimeCodeError
+
+
+timeparser.TimeFormats.config(try_hard=True)
+timeparser.DateFormats.config(try_hard=True)
+timeparser.DatetimeFormats.config(try_hard=True)
+
+
+FILES = (
+    'logscan.conf',
+    '/usr/local/etc/logscan.conf',
+    '/usr/etc/logscan.conf',
+    )
+
+USAGE = """usage: 
+  logscan -h
+  logscan [LOGFILE] [OPTIONS]
+"""
+
+HELP = """usage: 
+  logscan -h
+  logscan [LOGFILE] [OPTIONS]
+
+description:
+  Get time-specific access to logfiles.
+
+  logscan is able to handle rotated and/or gzipped logfiles or to read stdin.
+  It supports several formats for time-information in the log, and checks the
+  logfiles automatically for them. You can also specify further formats in
+  logscan.conf.
+
+
+positional argument:
+  LOGFILE                   If LOGFILE is missing or '-' stdin is read instead.
+
+optional arguments:
+  -h, --help                print this help message and exit
+  -i, --info                print the number of files, the start-time and end-time
+  -c, --timecode TIMECODE   use TIMECODE to parse the log-times (e.g. "%Y-%m-%d %H:%M:%S")
+  -g, --grep PATTERN        print only lines where PATTERN was found
+  -d, --date DATE           print all log-entries of DATE
+
+arguments for times:
+  -d, --date DATE           print all log-entries of DATE
+  -t, --time [DATE] TIME    specify a point of time; use it twice to specify
+                            a start- and end-time
+
+argruments for durations:
+  -p, --plus [WEEKS] [DAYS] [HOURS] [MINUTES] [SECONDS]
+  -m, --minus [WEEKS] [DAYS] [HOURS] [MINUTES] [SECONDS]
+
+
+times (DATE and TIME):
+  DATE and TIME could be in any format. Logscan tries hard to interpret the input
+  as valid date or time.
+  If DATE is omitted for --time logscan uses the date of the last log-entry.
+  If DATE is incomplete logscan completes it with the year or the year and month
+  of the actual date.
+
+
+durations:
+  To specify a positive duration use --plus, for a negative use --minus.
+  All values are interpreted as weeks, days, hours, minutes or seconds -in this
+  order starting with days. Alternatively you can flag the values with letters
+  matching those keywords.
+  So to specify a positive duration of 3 days and 4 minutes you can either do
+  "--plus 3 0 4" or --plus 3d 4m.
+
+
+Which period to print is defined as follows:
+  no times and no duration:         from start to eof
+  one time and no duration:         from time to eof
+  two times and no duration:        from time-one to time-two
+  no times and positive duration:   form start to end of duration
+  no times and negative duration:   from begin of duration to eof
+  one time and positive duration:   from time to end of duration
+  one time and negative duration:   from begin of duration to time
+
+
+time-code-formats:
+  logscan checks a log-file automatically for these formats:
+  %Y-%m-%d %H:%M:%S
+  %b %d %X %Y
+  %b %d %X
+  Also a timestamp as total amount of seconds since epoche (1970-01-01 00:00:00 UTC)
+  is supported. logscan expects for it a ten-digit decimal with three decimal-places.
+  To specify further format-codes use logscan.conf. logscan uses either the first
+  format that fits or an explicitly with --timecode given format.
+  A list of all available format-codes can be recieved from 'date --help'.
+
+
+Please report bugs at https://github.com/thomst/logscan/issues"""
+
+#TODO: arg for not-rotating
+#TODO: set timeparser.TODAY to log.end
+class Logscan:
+    def __init__(self):
+        self.parser = argparse.ArgumentParser(
+            prog='logscan',
+            usage=USAGE,
+            conflict_handler='resolve',
+            )
+        self.parser.add_argument(
+            '-h',
+            '--help',
+            action='store_true',
+            default=False,
+            )
+        self.parser.add_argument(
+            'logfile',
+            type=argparse.FileType('rb', 1),
+            nargs='?',
+            default='-',
+            )
+        self.parser.add_argument(
+            '-i',
+            '--info',
+            action='store_true',
+            default=False,
+            )
+        self.parser.add_argument(
+            '-c',
+            '--timecode',
+            type=str,
+            )
+        self.parser.add_argument(
+            '-g',
+            '--grep',
+            type=str,
+            )
+        self.parser.add_argument(
+            '-d',
+            '--date',
+            action=timeparse.ParseDate,
+            )
+        self.parser.add_argument(
+            '-t',
+            '--time',
+            action=timeparse.AppendTimeOrDatetime,
+            nargs='+',
+            )
+        self.parser.add_argument(
+            '-p',
+            '--plus',
+            action=timeparse.ParseTimedelta,
+            nargs='+',
+            default=timedelta(),
+            )
+        self.parser.add_argument(
+            '-m',
+            '--minus',
+            action=timeparse.ParseTimedelta,
+            nargs='+',
+            default=timedelta(),
+            )
+
+    def get_timecodes(self):
+        timecodes = list()
+        parse = lambda f: [l.rstrip('\n') for l in f if not re.match('[#\n ]+', l)]
+        for file in [f for f in FILES if os.path.isfile(f)]:
+            with open(file) as f: timecodes += parse(f)
+        return timecodes
+
+    def prepare_times(self):
+        for t in self.args.time:
+            if isinstance(t, time):
+                index = self.args.time.index(t)
+                self.args.time[index] = datetime.combine(self.log.end.date(), t)
+
+    def run(self):
+        self.args = self.parser.parse_args()
+        if self.args.help: print HELP
+        else: self.process_log()
+
+    def process_log(self):
+        self.log = RotatedLogs(self.args.logfile, self.args.timecode)
+
+        if not self.args.timecode: add_timecodes(self.get_timecodes())
+        if self.args.info: self.info()
+        elif self.args.date: self.date()
+        elif self.args.time and self.args.plus: self.time_and_positive_duration()
+        elif self.args.time and self.args.minus: self.time_and_negative_duration()
+        elif self.args.time: self.time()
+        elif self.args.plus: self.positive_duration()
+        elif self.args.minus: self.negative_duration()
+        else: self.print_section()
+
+    def info(self):
+        print os.path.basename(self.log.name) + ':'
+        print '  {0} files'.format(self.log.quantity)
+        print '  start: {0}'.format(self.log.start.strftime('%d.%m.%Y %H:%M:%S'))
+        print '  end: {0}'.format(self.log.end.strftime('%d.%m.%Y %H:%M:%S'))
+
+    def date(self):
+        start = datetime.combine(self.args.date, time())
+        end = datetime.combine(self.args.date + timedelta(days=1), time())
+        self.print_section(start, end)
+
+    def time_and_positive_duration(self):
+        self.prepare_times()
+        start = self.args.time[0]
+        end = self.args.time[0] + self.args.plus
+        self.print_section(start, end)
+
+    def time_and_negative_duration(self):
+        self.prepare_times()
+        start = self.args.time[0] - self.args.minus
+        end = self.args.time[0]
+        self.print_section(start, end)
+
+    def time(self):
+        self.prepare_times()
+        if len(self.args.time) is 1:
+            start = self.args.time[0]
+            end = None
+        else:
+            start = self.args.time[0]
+            end = self.args.time[1]
+        self.print_section(start, end)
+
+    def positive_duration(self):
+        start = None
+        end = self.log.start + self.args.plus
+        self.print_section(start, end)
+
+    def negative_duration(self):
+        start = self.log.end - self.args.minus
+        end = None
+        self.print_section(start, end)
+
+    def print_section(self, start=None, end=None):
+        lines = self.log.get_section(start, end)
+        if lines:
+            for line in lines:
+                if self.args.grep and not self.args.grep in line: continue
+                print line,
+        else:
+            print 'no entries between {0} and {1}'.format(
+                start or 'log-start',
+                end or 'log-end'
+                )
+
+
+if __name__ == "__main__":
+    logscan = Logscan()
+    try:
+        logscan.run()
+    except (KeyboardInterrupt, TimeCodeError) as err:
+        print err
+    except IOError:
+        pass
+    finally:
+        if hasattr(logscan, 'log'): logscan.log.close()
+
+
+
