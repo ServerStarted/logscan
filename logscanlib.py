@@ -206,6 +206,9 @@ class Log():
 
     def get_section(self, start=None, end=None):
         "Get loglines between two specified datetimes."
+        global last_time
+        if last_time == None:
+            last_time = start
         if start and start > self.end:
             return list()
         if end and end <= self.start:
