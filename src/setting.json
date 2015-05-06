@@ -1,0 +1,15 @@
+{
+	"logs": [ 
+		{
+			"file": "/loukou/log/store-web/app.log",
+			"regxs": ["Exception", "ERROR"],
+			"interval": 5,
+			"receiver_mails": ["chqlb@yahoo.com"] 
+		}
+	],
+	"sender_mail": {
+		"host": "smtp.163.com",
+		"username": "loukoucs@163.com",
+		"password": "loukou15"
+	}
+}
