@@ -1,5 +1,8 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
+'''
+监控日志文件，匹配到给定的正则，发邮件报警
+'''
 
 import datetime
 import subprocess
@@ -9,6 +12,9 @@ from email.header import Header
 import inspect
 import os
 import json
+import time, os, sched 
+
+inc = 300   # 定时扫描log 的时间周期
 
 smtp = smtplib.SMTP()
 
@@ -79,8 +85,9 @@ def scan_file(log, sender_mail):
     # count all request
     start_time = str(start_hour) + ":" + str(start_min) + ":" + str(start_second)
     end_time = str(end_hour) + ":" + str(end_min) + ":" + str(end_second)
-    start_time = '13:15:00'
-    end_time = '13:20:00'
+    # for test
+    #start_time = '13:15:00'
+    #end_time = '13:20:00'
     
     print '# start: ' + start_time + ' end: ' + end_time
     
@@ -108,11 +115,14 @@ def scan_file(log, sender_mail):
     
         if not out is None and len(out) > 0:
             send_mail(log_file + '-' + regx, out, sender_mail['username'], receiver_mails)
-    
-    
-if __name__ == "__main__":
+
+def do_monitor():
+    # 循环调用   
+    schedule.enter(inc, 0, do_monitor, ())
+
     #  初始化
     print '-------------------- logscan start --------------------'
+    # 加载配置
     setting = load_setting()
     sender_mail = setting["sender_mail"]
     login_smtp(sender_mail)
@@ -125,3 +135,13 @@ if __name__ == "__main__":
     quit_smtp()
     print '-------------------- logscan end --------------------'
     print ''
+    
+if __name__ == "__main__":
+
+
+    # 定时执行monitor
+    schedule = sched.scheduler(time.time, time.sleep) 
+    
+    schedule.enter(0, 0, do_monitor, ())
+    schedule.run() 
+    
