@@ -12,8 +12,8 @@ setup(
     download_url = "https://pypi.python.org/packages/source/l/logscan/logscan-{version}.tar.gz".format(version=VERSION),
     description = 'Command-line-tool to get time-specific access to log-files.',
     long_description = open('README.rst').read() if os.path.isfile('README.rst') else str(),
-    py_modules = ["logscanlib"],
-    scripts = ["logscan"],
+    py_modules = ["logscanlib", "logscan"],
+    scripts = ["monitor"],
     data_files = [('etc', ['logscan.conf'])],
     install_requires = [
         'timeparser',

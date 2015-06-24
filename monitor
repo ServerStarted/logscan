@@ -20,12 +20,12 @@ smtp = smtplib.SMTP()
 
 # get hostname
 hostname = os.popen("hostname").read().strip().strip('\n')
+# get the directory path
+this_file = inspect.stack()[0][1]
+this_path = os.path.abspath(os.path.dirname(this_file))
 
 def load_setting():
-    # get the directory path of this script
-    this_file = inspect.stack()[0][1]
-    path = os.path.abspath(os.path.dirname(this_file))
-    file = open(path+"/setting.json", 'r')
+    file = open(this_path+"/setting.json", 'r')
     
     setting_str = ""
     for line in file:
@@ -86,8 +86,8 @@ def scan_file(log, sender_mail):
     start_time = str(start_hour) + ":" + str(start_min) + ":" + str(start_second)
     end_time = str(end_hour) + ":" + str(end_min) + ":" + str(end_second)
     # for test
-    #start_time = '13:15:00'
-    #end_time = '13:20:00'
+    #start_time = '19:10:00'
+    #end_time = '19:15:00'
     
     print '# start: ' + start_time + ' end: ' + end_time
     
@@ -96,9 +96,11 @@ def scan_file(log, sender_mail):
     receiver_mails = log['receiver_mails']
     interval_str = str(interval)+'m'
     
+    logscan = this_path + '/logscan'
+    
     # scan log file
     for regx in regxs:
-        logscan_cmd = ['/usr/bin/logscan', log_file, '-c', "%Y-%m-%d %H:%M:%S", '-t', start_time, '-p', interval_str]
+        logscan_cmd = [logscan, log_file, '-c', "%Y-%m-%d %H:%M:%S", '-t', start_time, '-p', interval_str]
         grep_cmd = ['grep', regx]
         print '# logscan_cmd: ', logscan_cmd
         print '# grep_cmd: ', grep_cmd
