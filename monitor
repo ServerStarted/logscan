@@ -80,7 +80,7 @@ def scan_file(log, sender_mail):
     
     end_hour = end_date_time.hour
     end_min = end_date_time.minute
-    end_second = 59
+    end_second = 0
     
     # count all request
     start_time = str(start_hour) + ":" + str(start_min) + ":" + str(start_second)
@@ -120,7 +120,7 @@ def scan_file(log, sender_mail):
 
 def do_monitor():
     # 循环调用   
-    schedule.enter(inc, 0, do_monitor, ())
+#     schedule.enter(inc, 0, do_monitor, ())
 
     #  初始化
     print '-------------------- logscan start --------------------'
@@ -140,10 +140,11 @@ def do_monitor():
     
 if __name__ == "__main__":
 
+    do_monitor()
 
     # 定时执行monitor
-    schedule = sched.scheduler(time.time, time.sleep) 
-    
-    schedule.enter(0, 0, do_monitor, ())
-    schedule.run() 
+#     schedule = sched.scheduler(time.time, time.sleep) 
+#     
+#     schedule.enter(0, 0, do_monitor, ())
+#     schedule.run() 
     

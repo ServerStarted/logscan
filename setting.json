@@ -1,10 +1,10 @@
 {
 	"logs": [ 
 		{
-			"file": "/loukou/log/store-web/app.log",
+			"file": "/data/applogs/user-service/app.log",
 			"regxs": ["Exception", "ERROR"],
 			"interval": 5,
-			"receiver_mails": ["chqlb@yahoo.com"] 
+			"receiver_mails": ["chenhaiqiang@loukou.com", "zongzhaoxiu@loukou.com"] 
 		}
 	],
 	"sender_mail": {
