@@ -197,7 +197,8 @@ class Logscan:
         for t in self.args.time:
             if isinstance(t, time):
                 index = self.args.time.index(t)
-                self.args.time[index] = datetime.combine(self.log.end.date(), t)
+                if self.log.end != None:
+                    self.args.time[index] = datetime.combine(self.log.end.date(), t)
 
     def run(self):
         self.args = self.parser.parse_args()
